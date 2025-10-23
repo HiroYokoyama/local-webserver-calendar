@@ -46,30 +46,9 @@ Flaskライブラリをインストールする必要があります。
 pip install flask
 ```
 
-### 2\. (重要) APIパスの修正
+### 2\. 設定
 
-このプロジェクトを `python calendar-app.py` で直接実行して `http://127.0.0.1:8001/` でアクセスする場合、`index.html` がリクエストするAPIパスを修正する必要があります。
-
-**`index.html` を開き、以下の3箇所を変更してください:**
-
-1.  **読み込み:**
-
-      * 変更前: `events: '/calendar/api/events',`
-      * 変更後: `events: '/api/events',`
-
-2.  **作成 (POST):**
-
-      * 変更前: `fetch('/calendar/api/events', {`
-      * 変更後: `fetch('/api/events', {`
-
-3.  **削除 (DELETE):**
-
-      * 変更前: `fetch('/calendar/api/events/' + clickInfo.event.id, {`
-      * 変更後: `fetch('/api/events/' + clickInfo.event.id, {`
-
-### 3\. サーバーの起動
-
-パスを修正したら、Pythonスクリプトを実行してサーバーを起動します。
+詳細は、SETUP.mdを参照してください。
 
 ```bash
 python calendar-app.py
