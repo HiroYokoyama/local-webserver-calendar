@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang='ja'>
+<head>
+    <meta charset='utf-8' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js'></script>
+
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        #calendar { max-width: 1100px; margin: 0 auto; }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'ja',
+                timeZone: 'Asia/Tokyo',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+
+                // --- ★ 編集・作成機能の有効化 ★ ---
+                editable: true,
+                selectable: true,
+
+                // --- ★ データの読み込み先 ★ ---
+                events: '/calendar/api/events',
+
+                // --- ★ イベント作成処理 (日付範囲を選択した時) ★ ---
+                // (※時間指定できるようにロジックを変更)
+                select: function(selectionInfo) {
+                    var title = prompt('予定のタイトルを入力してください:');
+                    
+                    if (!title) {
+                        calendar.unselect(); // タイトルがなければ選択解除
+                        return;
+                    }
+
+                    // 送信用のイベントデータオブジェクト
+                    var newEvent = {
+                        title: title
+                    };
+
+                    // 1日の差分を計算 (ミリ秒 -> 日)
+                    var diffDays = (selectionInfo.end.getTime() - selectionInfo.start.getTime()) / (1000 * 60 * 60 * 24);
+
+                    // 月ビューでの単一日選択 (allDay=true で 差分がちょうど1日) の場合
+                    if (selectionInfo.allDay && diffDays === 1) {
+                        var time = prompt('開始時間を入力してください (例: 14:30)。\n省略すると終日予定になります。');
+                        
+                        if (time) {
+                            // 時間が入力されたら、ISO形式の文字列を作成
+                            newEvent.start = selectionInfo.startStr + 'T' + time + ':00'; //例: "2025-10-23T14:30:00"
+                            newEvent.allDay = false;
+                            // 終了時間は設定しない (FullCalendarが開始時間のみの予定として扱う)
+                        } else {
+                            // 時間が入力されなかったら、終日予定
+                            newEvent.start = selectionInfo.startStr;
+                            newEvent.end = selectionInfo.endStr;
+                            newEvent.allDay = true;
+                        }
+                    } else {
+                        // それ以外 (週/日ビュー、または月ビューで複数日ドラッグ)
+                        newEvent.start = selectionInfo.startStr;
+                        newEvent.end = selectionInfo.endStr;
+                        newEvent.allDay = selectionInfo.allDay;
+                    }
+
+
+                    // FlaskサーバーのPOST APIにデータを送信
+                    fetch('/calendar/api/events', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(newEvent), // ★変更点: 作成したnewEventオブジェクトを送信
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.status === 'success') {
+                            // 成功したらカレンダーに新しいイベントを追加
+                            // ★変更点: newEventのプロパティを使ってカレンダーに追加
+                            calendar.addEvent({
+                                id: data.id, // サーバーが返したID
+                                title: newEvent.title,
+                                start: newEvent.start,
+                                end: newEvent.end,
+                                allDay: newEvent.allDay
+                            });
+                        } else {
+                            alert("予定の保存に失敗しました: " + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert("サーバーとの通信に失敗しました。");
+                    });
+                    
+                    calendar.unselect(); // 選択解除
+                },
+                
+                // --- ★ イベントクリック処理 (削除) ★ ---
+                // (※削除APIを呼び出すように変更)
+                eventClick: function(clickInfo) {
+                    if (confirm("'" + clickInfo.event.title + "' を削除しますか？")) {
+                        
+                        // FlaskサーバーのDELETE APIにリクエスト
+                        fetch('/calendar/api/events/' + clickInfo.event.id, {
+                            method: 'DELETE',
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                // 成功したらカレンダーからイベントを削除
+                                clickInfo.event.remove();
+                            } else {
+                                // 失敗
+                                response.json().then(data => {
+                                    alert("削除に失敗しました: " + (data.error || "不明なエラー"));
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert("サーバーとの通信に失敗しました。");
+                        });
+                    }
+                }
+
+            });
+            calendar.render();
+        });
+    </script>
+</head>
+<body>
+    <div id='calendar'></div>
+</body>
+</html>
