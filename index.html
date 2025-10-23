@@ -7,6 +7,11 @@
     <style>
         body { font-family: sans-serif; margin: 40px; }
         #calendar { max-width: 1100px; margin: 0 auto; }
+
+        /* ★追加: 予定タイトルの折り返しを許可 */
+        #calendar .fc-event-title {
+            white-space: normal;
+        }
     </style>
 
     <script>
@@ -30,7 +35,6 @@
                 events: '/calendar/api/events',
 
                 // --- ★ イベント作成処理 (日付範囲を選択した時) ★ ---
-                // (※時間指定できるようにロジックを変更)
                 select: function(selectionInfo) {
                     var title = prompt('予定のタイトルを入力してください:');
                     
@@ -52,18 +56,14 @@
                         var time = prompt('開始時間を入力してください (例: 14:30)。\n省略すると終日予定になります。');
                         
                         if (time) {
-                            // 時間が入力されたら、ISO形式の文字列を作成
-                            newEvent.start = selectionInfo.startStr + 'T' + time + ':00'; //例: "2025-10-23T14:30:00"
+                            newEvent.start = selectionInfo.startStr + 'T' + time + ':00';
                             newEvent.allDay = false;
-                            // 終了時間は設定しない (FullCalendarが開始時間のみの予定として扱う)
                         } else {
-                            // 時間が入力されなかったら、終日予定
                             newEvent.start = selectionInfo.startStr;
                             newEvent.end = selectionInfo.endStr;
                             newEvent.allDay = true;
                         }
                     } else {
-                        // それ以外 (週/日ビュー、または月ビューで複数日ドラッグ)
                         newEvent.start = selectionInfo.startStr;
                         newEvent.end = selectionInfo.endStr;
                         newEvent.allDay = selectionInfo.allDay;
@@ -76,20 +76,17 @@
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(newEvent), // ★変更点: 作成したnewEventオブジェクトを送信
+                        body: JSON.stringify(newEvent),
                     })
                     .then(response => response.json())
                     .then(data => {
                         if(data.status === 'success') {
-                            // 成功したらカレンダーに新しいイベントを追加
-                            // ★変更点: newEventのプロパティを使ってカレンダーに追加
-                            calendar.addEvent({
-                                id: data.id, // サーバーが返したID
-                                title: newEvent.title,
-                                start: newEvent.start,
-                                end: newEvent.end,
-                                allDay: newEvent.allDay
-                            });
+                            // --- ★★★ 変更点 ★★★ ---
+                            // 手動で calendar.addEvent() を呼ぶ代わりに、
+                            // サーバーからイベント全体を再読み込みします。
+                            // これで二重表示が防げます。
+                            calendar.refetchEvents();
+                            // -------------------------
                         } else {
                             alert("予定の保存に失敗しました: " + data.error);
                         }
@@ -103,7 +100,6 @@
                 },
                 
                 // --- ★ イベントクリック処理 (削除) ★ ---
-                // (※削除APIを呼び出すように変更)
                 eventClick: function(clickInfo) {
                     if (confirm("'" + clickInfo.event.title + "' を削除しますか？")) {
                         
@@ -113,10 +109,12 @@
                         })
                         .then(response => {
                             if (response.ok) {
-                                // 成功したらカレンダーからイベントを削除
-                                clickInfo.event.remove();
+                                // --- ★★★ 変更点 ★★★ ---
+                                // 手動で clickInfo.event.remove() を呼ぶ代わりに、
+                                // サーバーからイベント全体を再読み込みします。
+                                calendar.refetchEvents();
+                                // -------------------------
                             } else {
-                                // 失敗
                                 response.json().then(data => {
                                     alert("削除に失敗しました: " + (data.error || "不明なエラー"));
                                 });
