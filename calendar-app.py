@@ -39,9 +39,34 @@ def index():
 
 @app.route('/api/events', methods=['GET'])
 def get_events():
-    """DBから全ての予定を取得してFullCalendarに渡す"""
+    """
+    (修正後) DBから「指定された期間の」予定のみ取得
+    FullCalendarは ?start=...&end=... というパラメータを自動で送る
+    """
+    
+    # 1. FullCalendarから送られた「表示期間」を取得
+    #    (例: '2025-09-28T00:00:00+09:00' のような文字列で来る)
+    view_start = request.args.get('start')
+    view_end = request.args.get('end')
+
     db = get_db()
-    events_cursor = db.execute("SELECT id, title, start, [end] FROM events")
+
+    if not view_start or not view_end:
+        # もし期間が指定されなかったら、全件取得 (念のため)
+        app.logger.warn("Query parameters 'start' or 'end' are missing. Returning all events.")
+        events_cursor = db.execute("SELECT id, title, start, [end] FROM events")
+    else:
+        # 2. 期間で絞り込むSQL
+        #    (イベントの開始が、表示期間の終了より前) AND
+        #    (イベントの終了が、表示期間の開始より後)
+        # ※ COALESCE([end], start) は、もしendがNULLならstartを使う、という意味
+        app.logger.info(f"Fetching events between {view_start} and {view_end}")
+        events_cursor = db.execute(
+            """SELECT id, title, start, [end] FROM events 
+               WHERE start < ? AND COALESCE([end], start) > ?""",
+            (view_end, view_start) # パラメータの順番に注意
+        )
+    
     events = [dict(row) for row in events_cursor.fetchall()]
     return jsonify(events)
 
